@@ -42,6 +42,7 @@ public class RenderWaveSim : BasePostProcess<RenderWaveSim>
         if(gridValues is not null )
         {
             oldGridValues = new double[gridValues.Length];
+            grid.GetData(gridValues);
             Array.Copy(gridValues, oldGridValues, gridValues.Length);
         }
 
@@ -49,8 +50,8 @@ public class RenderWaveSim : BasePostProcess<RenderWaveSim>
 
         if(oldGridValues is not null )
         {
-            for(int x = 0; this.width < x; x++){
-                for(int y = 0; this.height < y; y++){
+            for(int x = 0; Math.Min(width, this.width) > x; x++){
+                for(int y = 0; Math.Min(height, this.height) > y; y++){
                     double value = oldGridValues[IndexOf(x,y, this.width, this.height)];
                     gridValues[IndexOf(x,y, width, height)] = value;
                 }
@@ -91,13 +92,17 @@ public class RenderWaveSim : BasePostProcess<RenderWaveSim>
             for ( int y = 0; y < height; y++ )
             {
                 double dist = Math.Sqrt( Math.Pow( midPoint.Item1 - x, 2 ) + Math.Pow( midPoint.Item2 - y, 2 ) );
-                gridValues[IndexOf(x,y)] = dist > 10 ? 0 : 1 - Math.Clamp((double)(dist - 6) / 4,0.0,1.0);
+                gridValues[IndexOf(x,y)] = dist > 50 ? 0 : 1 - Math.Clamp((double)(dist - 25) / 25,0.0,1.0);
             }
         }
 
         grid.SetData( gridValues );
         tempGrid.SetData( gridValues );
-        prevGrid.SetData( gridValues);
+        prevGrid.SetData( gridValues );
+
+        computeShader.Attributes.Set( "WaveGrid", grid );
+        computeShader.Attributes.Set( "TempGrid", tempGrid );
+        computeShader.Attributes.Set( "PrevGrid", prevGrid );
     }
 
     protected override void OnDestroy()
@@ -107,12 +112,12 @@ public class RenderWaveSim : BasePostProcess<RenderWaveSim>
 
     public override void Render()
     {
-        if(Screen.Width != width || Screen.Height != height)
+        if((int)Screen.Height != height || (int)Screen.Width != width)
             SetResolution((int)Screen.Width, (int)Screen.Height);
 
         for(int i = 0; i < 50; i++ )
         {
-            computeShader.Attributes.Set( "DeltaTime", 0.01);
+            computeShader.Attributes.Set( "DeltaTime", 0.1);
             computeShader.Attributes.Set( "Init", false);
             computeShader.Attributes.Set( "Result", targetTexture );
             computeShader.Attributes.Set( "WaveGrid", grid );

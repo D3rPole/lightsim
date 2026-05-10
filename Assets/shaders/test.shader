@@ -7,7 +7,7 @@ CS
 {
     #include "system.fxc"
 
-    
+
     int WIDTH < Attribute("Width"); >;
     int HEIGHT < Attribute("Height"); >;
 
@@ -27,11 +27,11 @@ CS
     {
         int index = IndexOf(id.xy);
 
-        float position = grid[index];
+        double position = grid[index];
 
         Result[id.xy] = float4(position < 0 ? 0 : position, position < 0 ? -position : 0, 0, 1);
 
-        float forceApplied = 0;
+        double forceApplied = 0;
 
         if(id.y + 1 < HEIGHT)   forceApplied += grid[IndexOf(uint2(id.x, id.y + 1))] - position;
         if(id.y > 0)            forceApplied += grid[IndexOf(uint2(id.x, id.y - 1))] - position;
