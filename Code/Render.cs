@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using Sandbox;
 using Sandbox.Engine.Settings;
@@ -20,7 +21,92 @@ public class RenderWaveSim : BasePostProcess<RenderWaveSim>
     GpuBuffer<double> tempGrid;
     GpuBuffer<double> prevGrid;
 
-    private int IndexOf(int x, int y, int width, int height){
+   
+    protected override void OnEnabled()
+    {
+        Mouse.Visibility = MouseVisibility.Visible;
+        base.OnEnabled();
+        material = Material.FromShader(shader);
+
+        computeShader = new ComputeShader( "shaders\\test" );
+
+        SetResolution((int)Screen.Width, (int)Screen.Height);
+
+        var midPoint = (width / 2, height / 2);
+
+        for ( int x = 0; x < width; x++ )
+        {
+            for ( int y = 0; y < height; y++ )
+            {
+                double dist = Math.Sqrt( Math.Pow( midPoint.Item1 - x, 2 ) + Math.Pow( midPoint.Item2 - y, 2 ) );
+                gridValues[IndexOf(x,y)] = dist > 50 ? 0 : 1 - Math.Clamp((double)(dist - 25) / 25,0.0,1.0);
+            }
+        }
+
+        grid.SetData( gridValues );
+        tempGrid.SetData( gridValues );
+        prevGrid.SetData( gridValues );
+
+        computeShader.Attributes.Set( "WaveGrid", grid );
+        computeShader.Attributes.Set( "TempGrid", tempGrid );
+        computeShader.Attributes.Set( "PrevGrid", prevGrid );
+    }
+
+    protected override void OnDestroy()
+    {
+        base.OnDestroy();
+    }
+
+    public override void Render()
+    {
+        if((int)Screen.Height != height || (int)Screen.Width != width)
+            SetResolution((int)Screen.Width, (int)Screen.Height);
+
+        if ( Input.Down("Attack1") )
+        {
+            Log.Info("A");
+            var pos = Mouse.Position;
+            grid.GetData(gridValues);
+            double[] prevGridData = new double[gridSize];
+            prevGrid.GetData(prevGridData);
+            for ( int x = 0; x < width; x++ )
+            {
+                for ( int y = 0; y < height; y++ )
+                {
+                    double dist = Math.Sqrt( Math.Pow( pos.x - x, 2 ) + Math.Pow( pos.y - y, 2 ) );
+                    double value = dist > 10 ? 0 : -1 - Math.Clamp((double)(dist - 5) / 5,0.0,1.0);
+                    gridValues[IndexOf(x,y)] += value;
+                    prevGridData[IndexOf(x,y)] += value;
+                }
+            }
+            grid.SetData(gridValues);
+            tempGrid.SetData(gridValues);
+            prevGrid.SetData(prevGridData);
+        }
+
+        for(int i = 0; i < 50; i++ )
+        {
+            computeShader.Attributes.Set( "DeltaTime", 0.1);
+            computeShader.Attributes.Set( "Init", false);
+            computeShader.Attributes.Set( "Result", targetTexture );
+            computeShader.Attributes.Set( "WaveGrid", grid );
+            computeShader.Attributes.Set( "TempGrid", tempGrid );
+
+            computeShader.Dispatch( width, height, 1 );
+
+            (grid, tempGrid) = (tempGrid, grid);
+        }
+
+        if ( Graphics.IsActive )
+        {
+            Graphics.UavBarrier( targetTexture );
+        }
+
+        Attributes.Set("waveTex", targetTexture);
+        Blit( BlitMode.Simple( material, Sandbox.Rendering.Stage.AfterPostProcess, 200), "blit" );
+    }
+
+     private int IndexOf(int x, int y, int width, int height){
         return (y * width + x);
     }
 
@@ -74,66 +160,5 @@ public class RenderWaveSim : BasePostProcess<RenderWaveSim>
         computeShader.Attributes.Set( "WaveGrid", grid );
         computeShader.Attributes.Set( "TempGrid", tempGrid );
         computeShader.Attributes.Set( "PrevGrid", prevGrid );
-    }
-
-    protected override void OnEnabled()
-    {
-        base.OnEnabled();
-        material = Material.FromShader(shader);
-
-        computeShader = new ComputeShader( "shaders\\test" );
-
-        SetResolution((int)Screen.Width, (int)Screen.Height);
-
-        var midPoint = (width / 2, height / 2);
-
-        for ( int x = 0; x < width; x++ )
-        {
-            for ( int y = 0; y < height; y++ )
-            {
-                double dist = Math.Sqrt( Math.Pow( midPoint.Item1 - x, 2 ) + Math.Pow( midPoint.Item2 - y, 2 ) );
-                gridValues[IndexOf(x,y)] = dist > 50 ? 0 : 1 - Math.Clamp((double)(dist - 25) / 25,0.0,1.0);
-            }
-        }
-
-        grid.SetData( gridValues );
-        tempGrid.SetData( gridValues );
-        prevGrid.SetData( gridValues );
-
-        computeShader.Attributes.Set( "WaveGrid", grid );
-        computeShader.Attributes.Set( "TempGrid", tempGrid );
-        computeShader.Attributes.Set( "PrevGrid", prevGrid );
-    }
-
-    protected override void OnDestroy()
-    {
-        base.OnDestroy();
-    }
-
-    public override void Render()
-    {
-        if((int)Screen.Height != height || (int)Screen.Width != width)
-            SetResolution((int)Screen.Width, (int)Screen.Height);
-
-        for(int i = 0; i < 50; i++ )
-        {
-            computeShader.Attributes.Set( "DeltaTime", 0.1);
-            computeShader.Attributes.Set( "Init", false);
-            computeShader.Attributes.Set( "Result", targetTexture );
-            computeShader.Attributes.Set( "WaveGrid", grid );
-            computeShader.Attributes.Set( "TempGrid", tempGrid );
-
-            computeShader.Dispatch( width, height, 1 );
-
-            (grid, tempGrid) = (tempGrid, grid);
-        }
-
-        if ( Graphics.IsActive )
-        {
-            Graphics.UavBarrier( targetTexture );
-        }
-
-        Attributes.Set("waveTex", targetTexture);
-        Blit( BlitMode.Simple( material, Sandbox.Rendering.Stage.AfterPostProcess, 200), "blit" );
     }
 }
